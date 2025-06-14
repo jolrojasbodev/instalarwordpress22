@@ -11,14 +11,10 @@ WP_DIR="/srv/www/wordpress"
 WP_ZIP_PATH="/tmp/wordpress.zip" # Ubicación temporal para la descarga del ZIP
 WP_EXTRACT_TEMP_DIR="/tmp/wordpress_extracted" # Directorio temporal para la descompresión
 
-# Detecta la primera dirección IP del servidor para una URL dinámica.
-SERVER_IP=$(hostname -I | awk '{print $1}')
-SITIO_URL="http://${SERVER_IP}" # URL del sitio WordPress
-
 TITULO_SITIO="Actividad_3"
 ADMIN_LOGIN="admin" # Considera un nombre de usuario más complejo.
 ADMIN_CLAVE="admin" # ¡CRÍTICO! Para producción, usa una contraseña fuerte.
-ADMIN_CORREO="jolrojasbo@gmail.com"
+ADMIN_CORREO="jolrojasbo@gmail.0com"
 POST_TITULO="Actividad_3"
 CONTENIDO_POST='<p style="text-align: justify;">Actividad 3 - Herramientas de Automatización de Despliegues - Jose Rojas: Este trabajo describe el desarrollo de un entorno de despliegue automatizado para la plataforma WordPress, basado en la operación conjunta de Vagrant, Ansible y WordPress. Vagrant aprovisiona una máquina virtual de VirtualBox, donde Ansible orquesta la instalación y configuración de Nginx, PHP-FPM y MySQL para WordPress. Finalmente, se utiliza WP-CLI para la creación automatizada del contenido inicial del sitio, ademas se incluyen reglas de seguridad en Nginx, para prevenir el ingreso a wp-admin.</p>'
 
@@ -82,8 +78,6 @@ if [ "$EUID" -ne 0 ]; then
     handle_error "Por favor, ejecuta este script con sudo o como usuario root."
 fi
 
-echo "IP del servidor detectada: ${SERVER_IP}. URL del sitio: ${SITIO_URL}"
-
 # Operaciones APT
 wait_for_apt_lock
 echo "Actualizando lista de paquetes (apt update)..."
@@ -92,6 +86,35 @@ sudo apt update || handle_error "Fallo al actualizar la lista de paquetes"
 wait_for_apt_lock
 echo "Instalando paquetes necesarios: Nginx, PHP-FPM (8.1), MySQL, y otros..."
 sudo apt install -y nginx php8.1-fpm ghostscript php8.1 php8.1-mysql php8.1-cli php8.1-curl php8.1-gd php8.1-mbstring php8.1-xml php8.1-xmlrpc php8.1-soap php8.1-bcmath php8.1-imagick php8.1-intl php8.1-zip mysql-server unzip lsof || handle_error "Fallo al instalar los paquetes"
+
+# --- Detección de IP (después de instalar curl) ---
+SERVER_IP=$(hostname -I | awk '{print $1}') # Esto obtiene la IP privada
+PUBLIC_IP=""
+
+# Intentar obtener la IP pública de AWS EC2 metadata
+echo "Intentando detectar la IP pública de AWS..."
+if command -v curl &> /dev/null; then
+    PUBLIC_IP_CANDIDATE=$(curl -s http://169.254.169.254/latest/meta-data/public-ipv4)
+    if [[ "$PUBLIC_IP_CANDIDATE" =~ ^[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}$ ]]; then
+        PUBLIC_IP="$PUBLIC_IP_CANDIDATE"
+    fi
+else
+    echo "Advertencia: 'curl' no está disponible para detectar la IP pública de AWS metadata."
+fi
+
+# Define SITIO_URL: Prioriza la IP pública si está disponible, de lo contrario usa la IP privada.
+if [ -n "$PUBLIC_IP" ]; then
+    SITIO_URL="http://${PUBLIC_IP}"
+    echo "¡ATENCIÓN! Se detectó una IP pública de AWS: ${PUBLIC_IP}. El sitio se configurará con esta IP."
+else
+    SITIO_URL="http://${SERVER_IP}"
+    echo "ADVERTENCIA: No se pudo obtener una IP pública de AWS. El sitio se configurará con la IP privada: ${SERVER_IP}."
+    echo "Si estás en AWS y esperas acceso público, asegúrate de que la instancia tenga una IP pública y que los grupos de seguridad (Security Groups) lo permitan."
+fi
+echo "IP del servidor detectada (usada para la URL del sitio): ${SITIO_URL}"
+
+# --- FIN Detección de IP ---
+
 
 # Configuración de servicios
 echo "Asegurando que MySQL esté iniciado y habilitado..."
@@ -196,7 +219,8 @@ if [ -f /etc/nginx/sites-enabled/default ]; then
 fi
 
 echo "Copiando y adaptando configuración de Nginx..."
-sed "s|{{SERVER_IP_PLACEHOLDER}}|$SERVER_IP|g" ./data/nginx.conf | sudo tee /etc/nginx/sites-available/wordpress.conf > /dev/null || handle_error "Fallo al copiar y adecuar nginx.conf"
+# Reemplaza el marcador de posición en nginx.conf con la SITIO_URL (pública o privada)
+sed "s|{{SERVER_IP_PLACEHOLDER}}|$SITIO_URL|g" ./data/nginx.conf | sudo tee /etc/nginx/sites-available/wordpress.conf > /dev/null || handle_error "Fallo al copiar y adecuar nginx.conf"
 
 sudo chmod "$FILE_PERMISSIONS" /etc/nginx/sites-available/wordpress.conf || handle_error "Fallo al ajustar permisos de nginx.conf"
 sudo nginx -t || handle_error "Error de sintaxis en la configuración de Nginx."
@@ -242,7 +266,7 @@ echo "Actualizando plugins de WordPress..."
 sudo -u www-data "$RUTA_WP_CLI_BIN" plugin update --all --path="$WP_DIR" --allow-root || handle_error "Fallo al actualizar plugins"
 
 echo "Actualizando temas de WordPress..."
-sudo -u www-data "$RUTA_WP_CLI_BIN" theme update --all --path="$WP_DIR" --allow-root || handle_error "Fallo al actualizar temas"
+sudo -u www-data "$RUTA_WP_CLI_BIN" theme update --all --path="$WP_DIR" --allow_root || handle_error "Fallo al actualizar temas"
 
 echo "Eliminando post por defecto (ID 1)..."
 sudo -u www-data "$RUTA_WP_CLI_BIN" post delete 1 --force --path="$WP_DIR" --allow-root || echo "Advertencia: Fallo al eliminar post 1 (podría no existir)."
@@ -262,4 +286,5 @@ echo "--- Instalación y configuración de WordPress completada con éxito ---"
 echo "Ahora puedes acceder a tu sitio WordPress en: ${SITIO_URL}"
 echo "Usuario administrador: ${ADMIN_LOGIN}"
 echo "Contraseña administrador: ${ADMIN_CLAVE}"
+
 

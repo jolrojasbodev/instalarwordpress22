@@ -16,7 +16,7 @@ ADMIN_LOGIN="admin" # Considera un nombre de usuario más complejo.
 ADMIN_CLAVE="admin" # ¡CRÍTICO! Para producción, usa una contraseña fuerte.
 ADMIN_CORREO="jolrojasbo@gmail.com"
 POST_TITULO="Actividad_3"
-CONTENIDO_POST='<p style="text-align: justify;">Actividad 3 - Herramientas de Automatización de Despliegues - Jose Rojas: Este trabajo describe el desarrollo de un entorno de despliegue automatizado para la plataforma WordPress, basado en la operación conjunta de Vagrant, Ansible y WordPress. Vagrant aprovisiona una máquina virtual de VirtualBox, donde Ansible orquesta la instalación y configuración de Nginx, PHP-FPM y MySQL para WordPress. Finalmente, se utiliza WP-CLI para la creación automatizada del contenido inicial del sitio, ademas se incluyen reglas de seguridad en Nginx, para prevenir el ingreso a wp-admin.</p>'
+CONTENIDO_POST='<p style="text-align: justify;">Actividad 3 - Despliegue Automatizado de WordPress: Este trabajo presenta un script Bash diseñado para la **instalación y configuración automatizada de WordPress**. El script se encarga de aprovisionar un entorno LAMP/LEMP completo, incluyendo **Nginx, PHP-FPM y MySQL**, en un sistema Ubuntu. Además, utiliza WP-CLI para la creación inicial del sitio y su contenido, así como la configuración de reglas de seguridad básicas en Nginx. El objetivo principal de esta actividad es **comparar la eficiencia y el comportamiento de este mismo despliegue en dos entornos distintos: una máquina virtual en VirtualBox y una instancia en AWS EC2**, analizando las diferencias y consideraciones específicas de cada plataforma.</p>'
 
 LINK_WP_ZIP="https://wordpress.org/latest.zip"
 LINK_WP_SHA1="https://wordpress.org/latest.zip.sha1"
@@ -27,6 +27,9 @@ RUTA_WP_CLI_BIN="/usr/local/bin/wp"
 DIR_PERMISSIONS="0755"
 FILE_PERMISSIONS="0644"
 WP_CONFIG_PERMISSIONS="0640" # Permisos más restrictivos para wp-config.php
+
+# Se guarda el log en la misma ubicación del script con el nombre especificado
+LOG_FILE="$(dirname "$0")/tiempodeinstalacion.log"
 
 # --- FUNCIONES AUXILIARES ---
 
@@ -71,6 +74,7 @@ wait_for_apt_lock() {
 
 # --- INICIO DEL SCRIPT ---
 
+START_TIME=$(date +%s) # Registro de tiempo de inicio
 echo "--- Iniciando instalación y configuración de WordPress en Ubuntu 22.04 ---"
 
 # Verificar que el script se ejecute como root
@@ -87,11 +91,10 @@ wait_for_apt_lock
 echo "Instalando paquetes necesarios: Nginx, PHP-FPM (8.1), MySQL, y otros..."
 sudo apt install -y nginx php8.1-fpm ghostscript php8.1 php8.1-mysql php8.1-cli php8.1-curl php8.1-gd php8.1-mbstring php8.1-xml php8.1-xmlrpc php8.1-soap php8.1-bcmath php8.1-imagick php8.1-intl php8.1-zip mysql-server unzip lsof || handle_error "Fallo al instalar los paquetes"
 
-# --- Detección de IP (después de instalar curl) ---
+# Detección de IP
 SERVER_IP=$(hostname -I | awk '{print $1}') # Esto obtiene la IP privada
 PUBLIC_IP=""
 
-# Intentar obtener la IP pública de AWS EC2 metadata
 echo "Intentando detectar la IP pública de AWS..."
 if command -v curl &> /dev/null; then
     PUBLIC_IP_CANDIDATE=$(curl -s http://169.254.169.254/latest/meta-data/public-ipv4)
@@ -112,9 +115,6 @@ else
     echo "Si estás en AWS y esperas acceso público, asegúrate de que la instancia tenga una IP pública y que los grupos de seguridad (Security Groups) lo permitan."
 fi
 echo "IP del servidor detectada (usada para la URL del sitio): ${SITIO_URL}"
-
-# --- FIN Detección de IP ---
-
 
 # Configuración de servicios
 echo "Asegurando que MySQL esté iniciado y habilitado..."
@@ -239,7 +239,6 @@ sudo chown www-data:www-data "$WP_DIR"/wp-config.php || handle_error "Fallo al c
 sudo chmod "$WP_CONFIG_PERMISSIONS" "$WP_DIR"/wp-config.php || handle_error "Fallo al ajustar permisos de wp-config.php"
 
 echo "Comprobando si WordPress ya está instalado..."
-# Eliminamos --allow-root ya que el comando se ejecuta como www-data
 if sudo -u www-data "$RUTA_WP_CLI_BIN" core is-installed --path="$WP_DIR" &>/dev/null; then
     echo "WordPress ya está instalado. Saltando instalación core."
     WP_IS_INSTALLED=true
@@ -264,23 +263,18 @@ fi
 
 # Post-instalación de WordPress (plugins, temas, posts)
 echo "Actualizando plugins de WordPress..."
-# Eliminamos --allow-root
 sudo -u www-data "$RUTA_WP_CLI_BIN" plugin update --all --path="$WP_DIR" || handle_error "Fallo al actualizar plugins"
 
 echo "Actualizando temas de WordPress..."
-# Eliminamos --allow-root
 sudo -u www-data "$RUTA_WP_CLI_BIN" theme update --all --path="$WP_DIR" || handle_error "Fallo al actualizar temas"
 
 echo "Eliminando post por defecto (ID 1)..."
-# Eliminamos --allow-root
 sudo -u www-data "$RUTA_WP_CLI_BIN" post delete 1 --force --path="$WP_DIR" || echo "Advertencia: Fallo al eliminar post 1 (podría no existir)."
 
 echo "Eliminando página de ejemplo (ID 2)..."
-# Eliminamos --allow-root
 sudo -u www-data "$RUTA_WP_CLI_BIN" post delete 2 --force --path="$WP_DIR" || echo "Advertencia: Fallo al eliminar página 2 (podría no existir)."
 
 echo "Creando post personalizado en WordPress..."
-# Eliminamos --allow-root
 sudo -u www-data "$RUTA_WP_CLI_BIN" post create \
     --post_status=publish \
     --post_title="$POST_TITULO" \
@@ -291,3 +285,12 @@ echo "--- Instalación y configuración de WordPress completada con éxito ---"
 echo "Ahora puedes acceder a tu sitio WordPress en: ${SITIO_URL}"
 echo "Usuario administrador: ${ADMIN_LOGIN}"
 echo "Contraseña administrador: ${ADMIN_CLAVE}"
+
+# --- REGISTRO DE TIEMPO ---
+END_TIME=$(date +%s)
+RUN_TIME=$((END_TIME - START_TIME))
+DATE_STAMP=$(date +"%Y-%m-%d %H:%M:%S")
+
+echo "Tiempo de ejecución total: ${RUN_TIME} segundos."
+echo "${DATE_STAMP} - URL: ${SITIO_URL} - Tiempo de ejecución: ${RUN_TIME} segundos." | sudo tee -a "$LOG_FILE" > /dev/null
+echo "Tiempo de ejecución guardado en: $LOG_FILE"

@@ -28,7 +28,7 @@ RUTA_WP_CLI_BIN="/usr/local/bin/wp"
 # Permisos
 DIR_PERMISSIONS="0755"
 FILE_PERMISSIONS="0644"
-WP_CONFIG_PERMISSIONS="0640"
+WP_CONFIG_PERMISSIONS="0640" # Permisos más restrictivos para wp-config.php
 
 # --- FUNCIONES AUXILIARES ---
 
@@ -44,7 +44,7 @@ restart_nginx() {
     sudo systemctl restart nginx || handle_error "Fallo al reiniciar Nginx"
 }
 
-# CAMBIO CLAVE: Nombre del servicio PHP-FPM para Ubuntu 22.04
+# Nombre del servicio PHP-FPM para Ubuntu 22.04 es php8.1-fpm
 restart_phpfpm() {
     echo "Reiniciando PHP-FPM (php8.1-fpm)..."
     sudo systemctl restart php8.1-fpm || handle_error "Fallo al reiniciar PHP-FPM (php8.1-fpm)"
@@ -73,7 +73,7 @@ echo "Actualizando lista de paquetes..."
 sudo apt update || handle_error "Fallo al actualizar los paquetes"
 
 # Instalar paquetes
-# CAMBIO CLAVE: Especificar php8.1-fpm y otros módulos PHP para 8.1
+# Se especifican los paquetes PHP para Ubuntu 22.04 (PHP 8.1).
 echo "Instalando paquetes necesarios: Nginx, PHP-FPM (8.1), MySQL, y otros..."
 sudo apt install -y nginx \
 php8.1-fpm \
@@ -101,14 +101,15 @@ sudo systemctl start mysql || handle_error "Fallo al iniciar MySQL"
 sudo systemctl enable mysql || handle_error "Fallo al habilitar MySQL"
 
 # Asegurar que PHP-FPM esté iniciado y habilitado
-# CAMBIO CLAVE: Servicio php8.1-fpm
+# El servicio PHP-FPM para Ubuntu 22.04 es php8.1-fpm.
 echo "Asegurando que PHP-FPM (php8.1-fpm) esté iniciado y habilitado..."
-sudo systemctl start php8.1-fpm || handle_error "Fallo al iniciar PHP-FPM (php8.1-fpm)"
-sudo systemctl enable php8.1-fpm || handle_error "Fallo al habilitar PHP-FPM (php8.1-fpm)"
+sudo systemctl start php8.1-fpm || handle_error "Fallo al iniciar PHP-FPM"
+sudo systemctl enable php8.1-fpm || handle_error "Fallo al habilitar PHP-FPM"
 
 # Crear directorio www
 echo "Creando directorio $WP_DIR..."
 sudo mkdir -p /srv/www || handle_error "Fallo al crear /srv/www"
+# Establecer propietario y permisos para el directorio raíz del sitio
 sudo chown www-data:www-data /srv/www || handle_error "Fallo al cambiar propietario de /srv/www"
 sudo chmod "$DIR_PERMISSIONS" /srv/www || handle_error "Fallo al cambiar permisos de /srv/www"
 
@@ -132,15 +133,26 @@ if [ "$DOWNLOADED_SHA1" != "$WP_CHECKSUM" ]; then
 fi
 echo "Checksum de WordPress verificado correctamente."
 
-# Descomprimir WordPress
+# Descomprimir WordPress y mover archivos
 echo "Descomprimiendo WordPress en /srv/www/..."
+# Descomprime el zip, lo que crea una carpeta temporal 'wordpress' dentro de /srv/www/
 sudo unzip -q /srv/www/wordpress.zip -d /srv/www/ || handle_error "Fallo al descomprimir WordPress"
-sudo mv /srv/www/wordpress/* "$WP_DIR"/ || handle_error "Fallo al mover archivos de WordPress"
-sudo rmdir /srv/www/wordpress || handle_error "Fallo al eliminar directorio temporal de WordPress"
 
-# Eliminar archivo zip de WordPress
+# Mover los contenidos de la carpeta 'wordpress' generada por unzip a $WP_DIR
+# Usamos rsync para un movimiento más robusto y luego eliminamos la carpeta original.
+echo "Moviendo archivos de WordPress a $WP_DIR..."
+# Asegurarse de que $WP_DIR exista y tenga los permisos correctos antes de esto.
+# mkdir -p $WP_DIR ya se encargó de crearlo.
+sudo rsync -av --remove-source-files /srv/www/wordpress/ "$WP_DIR"/ || handle_error "Fallo al mover archivos de WordPress"
+
+# Eliminar el archivo zip de WordPress
 echo "Eliminando archivo zip de WordPress..."
 sudo rm -f /srv/www/wordpress.zip || handle_error "Fallo al eliminar wordpress.zip"
+
+# Eliminar el directorio temporal 'wordpress' que quedó vacío después de mover los archivos
+echo "Eliminando directorio temporal /srv/www/wordpress..."
+sudo rm -rf /srv/www/wordpress || handle_error "Fallo al eliminar directorio temporal /srv/www/wordpress"
+
 
 # Asegurar permisos de WordPress
 echo "Asegurando permisos para WordPress en $WP_DIR..."
@@ -155,7 +167,9 @@ sudo chmod "$DIR_PERMISSIONS" "$RUTA_WP_CLI_BIN" || handle_error "Fallo al dar p
 
 # Crear Base de Datos y Usuario WordPress
 echo "Creando base de datos y usuario de WordPress..."
-MYSQL_ROOT_PASS="$DB_PASS" # Usando la misma contraseña que db_pass para root, según tu playbook.
+# Usando la misma contraseña que db_pass para root, según tu playbook original.
+# ¡IMPORTANTE! En un entorno de producción, nunca uses la misma contraseña de la DB para el usuario root de MySQL.
+MYSQL_ROOT_PASS="$DB_PASS"
 sudo mysql -uroot -p"$MYSQL_ROOT_PASS" -e "CREATE USER IF NOT EXISTS '$DB_USER'@'$DB_SERVER' IDENTIFIED BY '$DB_PASS';" || handle_error "Fallo al crear usuario de MySQL"
 sudo mysql -uroot -p"$MYSQL_ROOT_PASS" -e "CREATE DATABASE IF NOT EXISTS $DB_NAME;" || handle_error "Fallo al crear base de datos MySQL"
 sudo mysql -uroot -p"$MYSQL_ROOT_PASS" -e "GRANT ALL ON $DB_NAME.* TO '$DB_USER'@'$DB_SERVER';" || handle_error "Fallo al conceder privilegios en MySQL"

@@ -14,7 +14,7 @@ WP_EXTRACT_TEMP_DIR="/tmp/wordpress_extracted" # Directorio temporal para la des
 TITULO_SITIO="Actividad_3"
 ADMIN_LOGIN="admin" # Considera un nombre de usuario más complejo.
 ADMIN_CLAVE="admin" # ¡CRÍTICO! Para producción, usa una contraseña fuerte.
-ADMIN_CORREO="jolrojasbo@gmail.0com"
+ADMIN_CORREO="jolrojasbo@gmail.com"
 POST_TITULO="Actividad_3"
 CONTENIDO_POST='<p style="text-align: justify;">Actividad 3 - Herramientas de Automatización de Despliegues - Jose Rojas: Este trabajo describe el desarrollo de un entorno de despliegue automatizado para la plataforma WordPress, basado en la operación conjunta de Vagrant, Ansible y WordPress. Vagrant aprovisiona una máquina virtual de VirtualBox, donde Ansible orquesta la instalación y configuración de Nginx, PHP-FPM y MySQL para WordPress. Finalmente, se utiliza WP-CLI para la creación automatizada del contenido inicial del sitio, ademas se incluyen reglas de seguridad en Nginx, para prevenir el ingreso a wp-admin.</p>'
 
@@ -239,7 +239,8 @@ sudo chown www-data:www-data "$WP_DIR"/wp-config.php || handle_error "Fallo al c
 sudo chmod "$WP_CONFIG_PERMISSIONS" "$WP_DIR"/wp-config.php || handle_error "Fallo al ajustar permisos de wp-config.php"
 
 echo "Comprobando si WordPress ya está instalado..."
-if sudo -u www-data "$RUTA_WP_CLI_BIN" core is-installed --path="$WP_DIR" --allow-root &>/dev/null; then
+# Eliminamos --allow-root ya que el comando se ejecuta como www-data
+if sudo -u www-data "$RUTA_WP_CLI_BIN" core is-installed --path="$WP_DIR" &>/dev/null; then
     echo "WordPress ya está instalado. Saltando instalación core."
     WP_IS_INSTALLED=true
 else
@@ -256,35 +257,37 @@ if [ "$WP_IS_INSTALLED" = false ]; then
         --admin_user="$ADMIN_LOGIN" \
         --admin_password="$ADMIN_CLAVE" \
         --admin_email="$ADMIN_CORREO" \
-        --skip-email --allow-root || handle_error "Fallo al instalar WordPress core"
+        --skip-email || handle_error "Fallo al instalar WordPress core"
 else
     echo "WordPress core ya instalado. Saltando este paso."
 fi
 
 # Post-instalación de WordPress (plugins, temas, posts)
 echo "Actualizando plugins de WordPress..."
-sudo -u www-data "$RUTA_WP_CLI_BIN" plugin update --all --path="$WP_DIR" --allow-root || handle_error "Fallo al actualizar plugins"
+# Eliminamos --allow-root
+sudo -u www-data "$RUTA_WP_CLI_BIN" plugin update --all --path="$WP_DIR" || handle_error "Fallo al actualizar plugins"
 
 echo "Actualizando temas de WordPress..."
-sudo -u www-data "$RUTA_WP_CLI_BIN" theme update --all --path="$WP_DIR" --allow_root || handle_error "Fallo al actualizar temas"
+# Eliminamos --allow-root
+sudo -u www-data "$RUTA_WP_CLI_BIN" theme update --all --path="$WP_DIR" || handle_error "Fallo al actualizar temas"
 
 echo "Eliminando post por defecto (ID 1)..."
-sudo -u www-data "$RUTA_WP_CLI_BIN" post delete 1 --force --path="$WP_DIR" --allow-root || echo "Advertencia: Fallo al eliminar post 1 (podría no existir)."
+# Eliminamos --allow-root
+sudo -u www-data "$RUTA_WP_CLI_BIN" post delete 1 --force --path="$WP_DIR" || echo "Advertencia: Fallo al eliminar post 1 (podría no existir)."
 
 echo "Eliminando página de ejemplo (ID 2)..."
-sudo -u www-data "$RUTA_WP_CLI_BIN" post delete 2 --force --path="$WP_DIR" --allow-root || echo "Advertencia: Fallo al eliminar página 2 (podría no existir)."
+# Eliminamos --allow-root
+sudo -u www-data "$RUTA_WP_CLI_BIN" post delete 2 --force --path="$WP_DIR" || echo "Advertencia: Fallo al eliminar página 2 (podría no existir)."
 
 echo "Creando post personalizado en WordPress..."
+# Eliminamos --allow-root
 sudo -u www-data "$RUTA_WP_CLI_BIN" post create \
     --post_status=publish \
     --post_title="$POST_TITULO" \
     --post_content="$CONTENIDO_POST" \
-    --path="$WP_DIR" \
-    --allow-root || handle_error "Fallo al crear post personalizado"
+    --path="$WP_DIR" || handle_error "Fallo al crear post personalizado"
 
 echo "--- Instalación y configuración de WordPress completada con éxito ---"
 echo "Ahora puedes acceder a tu sitio WordPress en: ${SITIO_URL}"
 echo "Usuario administrador: ${ADMIN_LOGIN}"
 echo "Contraseña administrador: ${ADMIN_CLAVE}"
-
-

@@ -15,7 +15,9 @@ ADMIN_LOGIN="admin"
 ADMIN_CLAVE="admin"
 ADMIN_CORREO="jolrojasbo@gmail.com"
 POST_TITULO="Actividad_3"
-CONTENIDO_POST='<p style="text-align: justify;">**Actividad 3 - Cloud Computing DevOps y DevOps Culture - Despliegue Automatizado de WordPress - Eric Garcia, Jose Rojas** : Este trabajo presenta un script Bash diseñado para la **instalación y configuración automatizada de WordPress**. El script se encarga de aprovisionar un entorno LAMP/LEMP completo, incluyendo **Nginx, PHP-FPM y MySQL**, en un sistema Ubuntu. Además, utiliza WP-CLI para la creación inicial del sitio y su contenido, así como la configuración de reglas de seguridad básicas en Nginx. El objetivo principal de esta actividad es **comparar la eficiencia y el comportamiento de este mismo despliegue en dos entornos distintos: una máquina virtual en VirtualBox y una instancia en AWS EC2**, analizando las diferencias y consideraciones específicas de cada plataforma.</p>'
+# --- CAMBIO EN EL CONTENIDO DEL POST: Usando etiquetas HTML <strong> para negritas ---
+CONTENIDO_POST='<p style="text-align: justify;"><strong>Actividad 3 - Cloud Computing DevOps y DevOps Culture - Despliegue Automatizado de WordPress - Eric Garcia, Jose Rojas</strong> : Este trabajo presenta un script Bash diseñado para la <strong>instalación y configuración automatizada de WordPress</strong>. El script se encarga de aprovisionar un entorno LAMP/LEMP completo, incluyendo <strong>Nginx, PHP-FPM y MySQL</strong>, en un sistema Ubuntu. Además, utiliza WP-CLI para la creación inicial del sitio y su contenido, así como la configuración de reglas de seguridad básicas en Nginx. El objetivo principal de esta actividad es <strong>comparar la eficiencia y el comportamiento de este mismo despliegue en dos entornos distintos: una máquina virtual en VirtualBox y una instancia en AWS EC2</strong>, analizando las diferencias y consideraciones específicas de cada plataforma.</p>'
+# --- FIN CAMBIO EN EL CONTENIDO DEL POST ---
 
 LINK_WP_ZIP="https://wordpress.org/latest.zip"
 LINK_WP_SHA1="https://wordpress.org/latest.zip.sha1"
